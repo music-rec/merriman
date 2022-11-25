@@ -1,57 +1,96 @@
-import React, { useEffect, useState } from 'react';
-import { Col } from 'reactstrap';
-import { MediaItem } from '../../../server/models';
-import { MediaPlayer } from '../MediaPlayer/MediaPlayer';
-import MediaManager from '../../managers/MediaManager';
 import * as R from 'ramda';
+import React, { useCallback, useEffect, useState } from 'react';
+import { FaRedo } from 'react-icons/fa';
+import { Link } from 'react-router-dom';
+import { Button, Card, CardImg, Col, InputGroup } from 'reactstrap';
+import Container from 'reactstrap/lib/Container';
+import Row from 'reactstrap/lib/Row';
+import { MediaItem } from '../../../server/models';
+import MediaManager from '../../managers/MediaManager';
 
-export const RandomMedia = () => {
-  const [index, setIndex] = useState(-1);
-  const [history, setHistory] = useState<Array<MediaItem>>([]);
+type RandomMediaProps = {
+  match: {
+    params: {
+      tag: string;
+    };
+  };
+};
+
+export const RandomMedia = (props: RandomMediaProps) => {
+  const [media, setMedia] = useState<Array<MediaItem>>([]);
+  const [count, setCount] = useState<number>(24);
+
+  const loadMedia = useCallback(
+    function () {
+      MediaManager.random(count).then(setMedia);
+    },
+    [count]
+  );
+
+  function handleRerollClick() {
+    loadMedia();
+  }
 
   useEffect(() => {
-    next();
-  }, []);
-
-  function next() {
-    MediaManager.random(1).then(([item]) => {
-      setHistory((hist) => hist.concat(item));
-      setIndex(R.inc);
-    });
-  }
-
-  function back() {
-    setIndex(R.dec);
-  }
-
-  window.scrollTo({ top: 0 });
+    loadMedia();
+  }, [count, loadMedia]);
   return (
-    <Col>
-      {index >= 0 ? (
-        <MediaPlayer id={history[index]._id.toString()} />
-      ) : (
-        <div />
-      )}
-      {index >= 0 ? (
-        <div>
-          <span>{history[index].views} views</span>
-          <br />
-          <div className="btn-group mb-1">
-            <button
-              className="btn btn-outline-primary btn-sm"
-              disabled={index === 0}
-              onClick={back}
+    <Container fluid>
+      <Row
+        style={{
+          position: 'sticky',
+          top: '0px',
+          zIndex: 9,
+          padding: '10px 0',
+          marginBottom: '5px',
+          backgroundColor: '#222',
+          boxSizing: 'border-box'
+        }}
+      >
+        <Col xs="6" xl="2">
+          <InputGroup>
+            <select
+              value={count}
+              onChange={(e) => setCount(parseInt(e.target.value))}
+              className="custom-select"
             >
-              &larr;
-            </button>
-            <button className="btn btn-outline-primary btn-sm" onClick={next}>
-              &rarr;
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div />
-      )}
-    </Col>
+              {R.range(2, 11)
+                .map((n) => n * 12)
+                .map((n) => (
+                  <option value={n}>{n}</option>
+                ))}
+            </select>
+          </InputGroup>
+        </Col>
+        <Col>
+          <Button onClick={handleRerollClick}>
+            <FaRedo /> Reroll
+          </Button>
+        </Col>
+      </Row>
+      <Row>
+        {R.splitEvery(4, media).map((group) =>
+          group.map((item, i) => {
+            return (
+              <Col xs="6" sm="6" lg="3" xl="2" key={i} className="video-cell">
+                <Card>
+                  <Link to={`/media/${item._id.toString()}`}>
+                    <CardImg src={`/${item.filename}.png` as string} />
+                  </Link>
+                  <div className="card-body">
+                    <Link
+                      to={`/media/${item._id.toString()}`}
+                      className="card-title"
+                    >
+                      {item.name}
+                    </Link>
+                  </div>
+                </Card>
+              </Col>
+            );
+          })
+        )}
+      </Row>
+    </Container>
   );
 };

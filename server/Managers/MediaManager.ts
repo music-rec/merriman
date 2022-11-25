@@ -16,6 +16,8 @@ import { NotFoundError } from '../Errors/NotFoundError';
 import { UnauthorizedError } from '../Errors/UnauthorizedError';
 import { TagStatistic } from '../ViewModels/TagStatistic';
 import { MediaStateRA } from '../ResourceAccess/MediaStateRA';
+import { toMediaFormat } from '../Formatters/MediaFormat';
+import busboy from 'busboy';
 
 @injectable()
 export class MediaManager {
@@ -111,7 +113,7 @@ export class MediaManager {
           Object.assign(item, info);
         }
       });
-      busboy.on('file', (field, file, filename) => {
+      busboy.on('file', (field, file, { filename }) => {
         const newMediaItem = this._mediaEngine.initializeUploadedMedia(
           filename,
           user.userId,
@@ -156,6 +158,18 @@ export class MediaManager {
     });
   }
 
+  async regenerateThumb(id: string, userId: string, timestamp?: string) {
+    const media = await this._mediaRA.findById(id, userId);
+    const serverConfig = AppContext.get(AppContext.WellKnown.Config);
+    await ThumbProvider.ensureThumbs(
+      [media.filename],
+      serverConfig.mediaLocation,
+      serverConfig.thumbLocation,
+      true,
+      timestamp
+    );
+  }
+
   findById(id: string, userId: string) {
     return this._mediaRA.findById(id, userId);
   }
@@ -191,13 +205,15 @@ export class MediaManager {
 
   async requestMeta(id: string, userId: string) {
     const media = await this._mediaRA.findById(id, userId);
-    const { stdout, stderr } = await requestMeta(
-      path.join(media.path, media.filename)
-    );
-    const meta = stdout === '' ? stderr : stdout;
-    media.meta = meta;
+    const data = await requestMeta(path.join(media.path, media.filename));
+
+    if (typeof data === 'string') {
+      media.meta = data;
+    } else {
+      media.formatData = toMediaFormat(data.format);
+    }
     await this._mediaRA.update(media);
-    return meta;
+    return data;
   }
 
   async generateSubs(id: string, track: string, userId: string) {
